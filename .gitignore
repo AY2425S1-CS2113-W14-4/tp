@@ -16,3 +16,6 @@ bin/
 /text-ui-test/ACTUAL.TXT
 text-ui-test/EXPECTED-UNIX.TXT
 /data/
+
+# Remove Custom Scripts
+sync.sh
