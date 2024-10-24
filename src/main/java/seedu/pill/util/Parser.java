@@ -13,6 +13,7 @@ import seedu.pill.exceptions.PillException;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.util.Arrays;
 
 public class Parser {
     private boolean exitFlag = false;
@@ -35,29 +36,26 @@ public class Parser {
     public void parseCommand(String input) {
         try {
             String[] splitInput = input.split("\\s+");
-            if (splitInput.length > 4) {
-                throw new PillException(ExceptionMessages.TOO_MANY_ARGUMENTS);
-            }
-            assert(splitInput.length <= 4);
             String commandString = splitInput[0].toLowerCase();
             String argument = splitInput.length > 1 ? splitInput[1] : null;
             String flagStr = splitInput.length > 2 ? splitInput[2] : "";
+            String arguments = String.join(" ", Arrays.copyOfRange(splitInput, 1, splitInput.length));
 
             switch (commandString) {
             case "exit":
                 this.exitFlag = true;
                 break;
             case "add":
-                parseAddItemCommand(splitInput).execute(this.items, this.storage);
+                parseAddItemCommand(arguments).execute(this.items, this.storage);
                 break;
             case "delete":
-                parseDeleteItemCommand(splitInput).execute(this.items, this.storage);
+                parseDeleteItemCommand(arguments).execute(this.items, this.storage);
                 break;
             case "edit":
-                parseEditItemCommand(splitInput).execute(this.items, this.storage);
+                parseEditItemCommand(arguments).execute(this.items, this.storage);
                 break;
             case "find":
-                new FindCommand(argument).execute(this.items, this.storage);
+                new FindCommand(arguments).execute(this.items, this.storage);
                 break;
             case "help":
                 boolean flag = flagStr.equals("-v");
@@ -84,94 +82,223 @@ public class Parser {
     }
 
     /**
-     * Parses the input and creates an {@code AddItemCommand} object.
-     * The input must be an array of strings that represents the item name, quantity, and optional expiry date.
-     * If the input exceeds four elements, a {@code PillException} is thrown.
+     * Parses the user input and creates an {@code AddItemCommand} object.
+     * The input is expected to contain the item name, quantity, and optional expiry date.
+     * If a valid date is found, it must be the last element in the input.
+     * Only one date and one quantity are allowed.
      *
-     * @param splitInput An array of strings representing the user's input.
-     *                   The array can contain the item name, quantity, and expiry date (optional).
-     * @return An {@code AddItemCommand} object containing the parsed item name, quantity, and expiry date.
-     * @throws PillException If the input contains more than four arguments.
+     * The method loops through the input array to determine the item name, quantity, and expiry date,
+     * applying default values when necessary (e.g., quantity defaults to 1 if not specified).
+     *
+     * @param arguments A string representing the user's input for adding an item
+     * @return An {@code AddItemCommand} containing the parsed item name, quantity, and optional expiry date.
+     * @throws PillException If the input format is invalid
      */
-    private AddItemCommand parseAddItemCommand(String[] splitInput) throws PillException {
-        if (splitInput.length > 4) {
-            throw new PillException(ExceptionMessages.TOO_MANY_ARGUMENTS);
-        }
-        assert(splitInput.length <= 4);
+    private AddItemCommand parseAddItemCommand(String arguments) throws PillException {
+        String[] splitArguments = arguments.split("\\s+");
 
-        String argument = splitInput.length > 1 ? splitInput[1] : null;
-        String quantityStr = "1";
+        if (splitArguments.length == 0) {
+            throw new PillException(ExceptionMessages.INVALID_ADD_COMMAND);
+        }
+
+        Integer quantityIndex = null;
+        Integer dateIndex = null;
+
+        for (int i = 0; i < splitArguments.length; i++) {
+            String currentArgument = splitArguments[i];
+
+            if (isValidDate(currentArgument)) {
+                if (dateIndex != null) {
+                    throw new PillException(ExceptionMessages.INVALID_ADD_COMMAND);
+                }
+                dateIndex = i;
+
+                if (i != splitArguments.length - 1) {
+                    throw new PillException(ExceptionMessages.INVALID_ADD_COMMAND);
+                }
+            }
+
+            if (isANumber(currentArgument)) {
+                quantityIndex = i;
+            }
+        }
+
+        String itemName;
+        String quantityStr = null;
         String expiryDateStr = null;
 
-        if (splitInput.length > 2) {
-            if (isANumber(splitInput[2])) {
-                quantityStr = splitInput[2];
-                if (splitInput.length > 3) {
-                    expiryDateStr = splitInput[3];
-                }
-            } else {
-                expiryDateStr = splitInput[2];
-            }
+        if (quantityIndex != null && quantityIndex == splitArguments.length - 1) {
+            quantityStr = splitArguments[quantityIndex];
+            expiryDateStr = null;
+            itemName = buildItemName(splitArguments, 0, quantityIndex);
+        } else if (quantityIndex != null && quantityIndex == splitArguments.length - 2
+                && isValidDate(splitArguments[quantityIndex + 1])) {
+            quantityStr = splitArguments[quantityIndex];
+            expiryDateStr = splitArguments[quantityIndex + 1];
+            itemName = buildItemName(splitArguments, 0, quantityIndex);
+        } else if (dateIndex != null && dateIndex == splitArguments.length - 1) {
+            expiryDateStr = splitArguments[dateIndex];
+            quantityStr = "1";
+            itemName = buildItemName(splitArguments, 0, dateIndex);
+        } else {
+            quantityStr = "1";
+            expiryDateStr = null;
+            itemName = buildItemName(splitArguments, 0, splitArguments.length);
         }
 
-        return new AddItemCommand(argument, parseQuantity(quantityStr), parseExpiryDate(expiryDateStr));
+        assert !itemName.isEmpty() : "Item name should not be empty";
+
+        assert isANumber(quantityStr) : "Quantity should be a valid number";
+
+        return new AddItemCommand(itemName, parseQuantity(quantityStr), parseExpiryDate(expiryDateStr));
     }
 
     /**
-     * Parses the input and creates an {@code DeleteItemCommand} object.
-     * The input must be an array of strings that represents the item name and expiry date.
-     * If the input exceeds three elements, a {@code PillException} is thrown.
+     * Parses the user input and creates a {@code DeleteItemCommand} object.
+     * The input is expected to contain the item name and optionally an expiry date.
+     * If a valid date is found, it must be the last element in the input.
      *
-     * @param splitInput An array of strings representing the user's input.
-     *                   The array contains the item name and expiry date.
-     * @return An {@code AddItemCommand} object containing the parsed item name and expiry date.
-     * @throws PillException If the input contains more than three arguments.
+     * The method constructs the item name by looping through the input until a valid date is found.
+     * Any valid date found is treated as the item's expiry date.
+     *
+     * @param arguments A string representing the user's input for deleting an item
+     * @return A {@code DeleteItemCommand} containing the parsed item name and optional expiry date.
+     * @throws PillException If the input format is invalid (e.g., more than one date or no item name provided).
      */
-    private DeleteItemCommand parseDeleteItemCommand(String[] splitInput) throws PillException {
-        if (splitInput.length > 3) {
-            throw new PillException(ExceptionMessages.TOO_MANY_ARGUMENTS);
+    private DeleteItemCommand parseDeleteItemCommand(String arguments) throws PillException {
+        String[] splitArguments = arguments.split("\\s+");
+
+        if (splitArguments.length == 0) {
+            throw new PillException(ExceptionMessages.INVALID_DELETE_COMMAND);
         }
-        assert(splitInput.length <= 3);
 
-        String argument = splitInput.length > 1 ? splitInput[1] : null;
-        String expiryDateStr = splitInput.length > 2 ? splitInput[2] : null;
+        StringBuilder itemNameBuilder = new StringBuilder();
+        int currentIndex = 0;
+        String expiryDateStr = null;
 
-        return new DeleteItemCommand(argument, parseExpiryDate(expiryDateStr));
+        while (currentIndex < splitArguments.length) {
+            if (isValidDate(splitArguments[currentIndex])) {
+                expiryDateStr = splitArguments[currentIndex];
+                break;
+            }
+            if (currentIndex > 0) {
+                itemNameBuilder.append(" ");
+            }
+            itemNameBuilder.append(splitArguments[currentIndex]);
+            currentIndex++;
+        }
+
+        String itemName = itemNameBuilder.toString().trim();
+
+        assert !itemName.isEmpty() : "Item name should not be empty";
+
+        LocalDate expiryDate = expiryDateStr != null ? parseExpiryDate(expiryDateStr) : null;
+
+        return new DeleteItemCommand(itemName, expiryDate);
     }
 
+
+
+
     /**
-     * Parses the user input to create an {@code EditItemCommand}.
-     * The input is expected to be split into an array of strings.
-     * The method handles scenarios where the user provides optional arguments
-     * such as the quantity of the item and the expiry date.
+     * Parses the user input to create an {@code EditItemCommand} object.
+     * The input is expected to contain the item name, the new quantity, and optionally the expiry date.
+     * The expiry date, if present, must be the second-to-last element, with the quantity being the last element.
      *
-     * @param splitInput The split user input as an array of strings.
-     *                   The first element is the command name, and the subsequent elements are the arguments.
-     * @return An {@code EditItemCommand} containing the item details parsed from the input.
-     * @throws PillException If there are more than 4 elements in the input array.
+     * The method loops through the input to determine the item name, quantity, and optional expiry date.
+     * The quantity is mandatory for editing, while the expiry date is optional.
+     *
+     * @param arguments A string representing the user's input for editing an item.
+     * @return An {@code EditItemCommand} containing the parsed item name, quantity, and optional expiry date.
+     * @throws PillException If the input format is invalid (e.g., no quantity provided, or multiple dates found).
      */
-    private EditItemCommand parseEditItemCommand(String[] splitInput) throws PillException {
-        if (splitInput.length > 4) {
-            throw new PillException(ExceptionMessages.TOO_MANY_ARGUMENTS);
+    private EditItemCommand parseEditItemCommand(String arguments) throws PillException {
+        String[] splitArguments = arguments.split("\\s+");
+
+        if (splitArguments.length == 0) {
+            throw new PillException(ExceptionMessages.INVALID_EDIT_COMMAND);
         }
-        assert(splitInput.length <= 4);
 
-        String argument = splitInput.length > 1 ? splitInput[1] : null;
-        String quantityStr = "1";
-        String expiryDateStr = splitInput[2];
+        Integer quantityIndex = null;
+        Integer dateIndex = null;
 
-        if (splitInput.length > 2) {
-            if (isANumber(splitInput[2])) {
-                quantityStr = splitInput[2];
-                if (splitInput.length > 3) {
-                    expiryDateStr = splitInput[3];
+        for (int i = 0; i < splitArguments.length; i++) {
+            String currentArgument = splitArguments[i];
+
+            if (isValidDate(currentArgument)) {
+                if (dateIndex != null) {
+                    throw new PillException(ExceptionMessages.INVALID_EDIT_COMMAND);
                 }
-            } else {
-                expiryDateStr = splitInput[2];
+                dateIndex = i;
+
+                if (i != splitArguments.length - 1 && i != splitArguments.length - 2) {
+                    throw new PillException(ExceptionMessages.INVALID_EDIT_COMMAND);
+                }
+            }
+
+            if (isANumber(currentArgument)) {
+                quantityIndex = i;
             }
         }
 
-        return new EditItemCommand(argument, parseQuantity(quantityStr), parseExpiryDate(expiryDateStr));
+        String itemName;
+        String quantityStr = null;
+        String expiryDateStr = null;
+
+        if (quantityIndex != null && quantityIndex == splitArguments.length - 1) {
+            quantityStr = splitArguments[quantityIndex];
+            expiryDateStr = null;
+            itemName = buildItemName(splitArguments, 0, quantityIndex);
+        } else if (quantityIndex != null && quantityIndex == splitArguments.length - 2
+                && isValidDate(splitArguments[quantityIndex + 1])) {
+            quantityStr = splitArguments[quantityIndex];
+            expiryDateStr = splitArguments[quantityIndex + 1];
+            itemName = buildItemName(splitArguments, 0, quantityIndex);
+        } else {
+            throw new PillException(ExceptionMessages.INVALID_EDIT_COMMAND);
+        }
+
+        assert !itemName.isEmpty() : "Item name should not be empty";
+
+        assert isANumber(quantityStr) : "Quantity should be a valid number";
+
+        return new EditItemCommand(itemName, parseQuantity(quantityStr), parseExpiryDate(expiryDateStr));
+    }
+
+    /**
+     * Checks if the provided string represents a valid date in the format {@code YYYY-MM-DD}.
+     * This method attempts to parse the string into a {@code LocalDate} object.
+     *
+     * @param dateStr A string representing the date to be validated.
+     * @return {@code true} if the string is a valid date, {@code false} otherwise.
+     */
+    private boolean isValidDate(String dateStr) {
+        try {
+            LocalDate.parse(dateStr);
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Constructs the item name by concatenating the elements of the input array from startIndex to endIndex.
+     * The method ensures that the item name is built by appending each element with a space between words.
+     *
+     * @param splitArguments An array of strings representing the user's input.
+     * @param startIndex The starting index (inclusive) for building the item name.
+     * @param endIndex The ending index (exclusive) for building the item name.
+     * @return A string representing the item name, constructed from the input array.
+     */
+    private String buildItemName(String[] splitArguments, int startIndex, int endIndex) {
+        StringBuilder itemNameBuilder = new StringBuilder();
+        for (int i = startIndex; i < endIndex; i++) {
+            if (i > startIndex) {
+                itemNameBuilder.append(" ");
+            }
+            itemNameBuilder.append(splitArguments[i]);
+        }
+        return itemNameBuilder.toString().trim();
     }
 
     /**

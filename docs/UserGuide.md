@@ -14,44 +14,6 @@
     - [Saving the Data](#saving-the-data)
     - [Editing the Data File](#editing-the-data-file)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## Introduction
 
 Pharmacy Inventory & Logistics Ledger (PILL) is a Command Line Interface (CLI) tool designed to assist in managing and tracking medicinal inventory.

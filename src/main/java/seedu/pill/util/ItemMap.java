@@ -18,7 +18,7 @@ import java.util.stream.IntStream;
  */
 public class ItemMap implements Iterable<Map.Entry<String, TreeSet<Item>>> {
     private static final Logger LOGGER = PillLogger.getLogger();
-    private Map<String, TreeSet<Item>> items;
+    Map<String, TreeSet<Item>> items;
 
     /**
      * Constructor for ItemMap.
@@ -307,5 +307,29 @@ public class ItemMap implements Iterable<Map.Entry<String, TreeSet<Item>>> {
         }
         LOGGER.info("Found " + foundItems.items.size() + " items matching: " + itemName);
         return foundItems;
+    }
+
+    /**
+     * Returns the total number of items in the map.
+     * This counts each individual item, including those with different expiry dates.
+     *
+     * @return The total number of items in the ItemMap.
+     */
+    public int size() {
+        int totalSize = 0;
+        for (TreeSet<Item> itemSet : items.values()) {
+            totalSize += itemSet.size();
+        }
+        return totalSize;
+    }
+
+    /**
+     * Returns the set of items with the given name.
+     *
+     * @param itemName The name of the item to retrieve.
+     * @return A TreeSet of items with the given name, or null if the item does not exist.
+     */
+    public TreeSet<Item> get(String itemName) {
+        return items.getOrDefault(itemName, new TreeSet<>());
     }
 }

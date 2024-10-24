@@ -31,6 +31,20 @@
 
 {Describe the design and implementation of the product. Use UML diagrams and short code snippets where applicable.}
 
+### UI and I/O
+The program uses a command-line interface (CLI) for interaction with the user. 
+It receives input as text commands, processes these commands, and provides feedback through the console.
+
+### Commands
+Each user action (e.g. adding, deleting, or editing an item) is mapped to a specific command class. 
+These classes handle the logic for interpreting the input and calling the appropriate methods from the ItemMap and Storage classes.
+
+Example:
+```
+AddItemCommand command = new AddItemCommand(itemName, quantity, expiryDate);
+command.execute(itemMap, storage);
+```
+
 ### Storage
 **API**: Storage.java
 
